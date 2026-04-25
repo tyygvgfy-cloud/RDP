@@ -5,17 +5,14 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Скачивание и подготовка Ngrok
+      - name: Установка Ngrok через Chocolatey
         run: |
-          Invoke-WebRequest https://bin.equinox.io/c/b34edq9GLS8/ngrok-stable-windows-amd64.zip -OutFile ngrok.zip
-          Expand-Archive -Path ngrok.zip -DestinationPath . -Force
-          # Проверка, где оказался файл (для отладки)
-          Get-ChildItem -Recurse -Filter ngrok.exe
+          choco install ngrok -y
 
       - name: Авторизация Ngrok
         run: |
           # Ожидает секрет NGROK_AUTH_TOKEN в настройках репозитория
-          ./ngrok.exe authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
+          ngrok authtoken ${{ secrets.NGROK_AUTH_TOKEN }}
 
       - name: Настройка системы и RDP
         run: |
@@ -28,10 +25,14 @@ jobs:
 
       - name: Запуск туннеля и получение адреса
         run: |
-          Start-Process Powershell -ArgumentList '-Noexit -Command "./ngrok.exe tcp 3389"'
-          Start-Sleep -Seconds 10
+          Start-Process Powershell -ArgumentList '-Noexit -Command "ngrok tcp 3389"'
+          Start-Sleep -Seconds 15
           # Выводим публичный адрес прямо в консоль GitHub
-          Invoke-RestMethod http://localhost:4040/api/tunnels | Select-Object -ExpandProperty tunnels | Select-Object -ExpandProperty public_url
+          $tunnels = Invoke-RestMethod http://localhost:4040/api/tunnels
+          $addr = $tunnels.tunnels[0].public_url
+          Write-Host "=========================================="
+          Write-Host "АДРЕС ДЛЯ ПОДКЛЮЧЕНИЯ: $addr"
+          Write-Host "=========================================="
 
       - name: Удержание сессии (Keep Alive)
         run: |
@@ -39,7 +40,7 @@ jobs:
           Write-Host "RDP сервер активен!"
           Write-Host "Пользователь: runneradmin"
           Write-Host "Пароль: MyPassword123!"
-          Write-Host "Если адрес выше не появился, проверь Dashboard на ngrok.com"
           Write-Host "=========================================="
           # Максимальное время работы GitHub Action (6 часов)
           Start-Sleep -Seconds 21600
+
