@@ -1,40 +1,44 @@
-name: RDP_Windows_Localtunnel
+name: RDP_Windows_Tailscale
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Установка Node.js и Localtunnel
+      - name: Установка Tailscale
         run: |
-          # Localtunnel работает на Node.js, который уже есть на виртуалке GitHub
-          npm install -g localtunnel
+          Invoke-WebRequest https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe -OutFile tailscale-setup.exe
+          Start-Process -FilePath .\tailscale-setup.exe -ArgumentList "/quiet" -Wait
 
-      - name: Настройка RDP и Пользователя
+      - name: Авторизация в Tailscale
         run: |
+          # ВНИМАНИЕ: Нужно создать Auth Key на tailscale.com и добавить его в GitHub Secrets как TAILSCALE_AUTH_KEY
+          & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }}
+
+      - name: Настройка RDP и Создание пользователя
+        run: |
+          # Включаем удаленный рабочий стол
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          # Создаем админа
+          
+          # Создаем пользователя с правами администратора
           net user runneradmin MyPassword123! /add
           net localgroup administrators runneradmin /add
 
-      - name: Запуск туннеля и вывод ссылки
+      - name: Получение IP и запуск
         run: |
-          # Запускаем туннель на порт RDP (3389)
-          # Мы используем фоновый процесс через PowerShell
-          Start-Process powershell -ArgumentList "-NoExit -Command `"lt --port 3389`""
-          
-          # Даем время на генерацию ссылки
-          Start-Sleep -Seconds 20
-          
+          # Ждем 10 секунд для стабилизации сети
+          Start-Sleep -Seconds 10
+          $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "=========================================="
-          Write-Host "СЕРВЕР ЗАПУЩЕН!"
+          Write-Host "СЕРВЕР ГОТОВ К РАБОТЕ!"
+          Write-Host "ТВОЙ IP ДЛЯ ПОДКЛЮЧЕНИЯ: $ip"
           Write-Host "ЛОГИН: runneradmin"
           Write-Host "ПАРОЛЬ: MyPassword123!"
-          Write-Host "ССЫЛКУ ИЩИ В ЛОГАХ ВЫШЕ (строка 'your url is: ...')"
           Write-Host "=========================================="
 
       - name: Удержание сессии (6 часов)
         run: |
+          # Чтобы GitHub не закрыл задачу
           Start-Sleep -Seconds 21600
