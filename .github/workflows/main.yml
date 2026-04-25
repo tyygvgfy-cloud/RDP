@@ -15,30 +15,32 @@ jobs:
           # ВНИМАНИЕ: Нужно создать Auth Key на tailscale.com и добавить его в GitHub Secrets как TAILSCALE_AUTH_KEY
           & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }}
 
-      - name: Настройка RDP и Создание пользователя
+      - name: Настройка RDP и Подготовка пользователя
         run: |
           # Включаем удаленный рабочий стол
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
           
-          # Создаем пользователя с правами администратора
-          net user runneradmin MyPassword123! /add
-          net localgroup administrators runneradmin /add
+          # Устанавливаем новый пароль для стандартного администратора
+          # Это решает ошибку "Аккаунт уже существует"
+          net user runneradmin MyPassword123!
+          # На всякий случай добавляем в группу (ошибка 1378 проигнорируется)
+          net localgroup administrators runneradmin /add /y
 
       - name: Получение IP и запуск
         run: |
-          # Ждем 10 секунд для стабилизации сети
-          Start-Sleep -Seconds 10
+          # Ждем 15 секунд для инициализации сети Tailscale
+          Start-Sleep -Seconds 15
           $ip = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
           Write-Host "=========================================="
           Write-Host "СЕРВЕР ГОТОВ К РАБОТЕ!"
-          Write-Host "ТВОЙ IP ДЛЯ ПОДКЛЮЧЕНИЯ: $ip"
+          Write-Host "ТВОЙ IP ДЛЯ ПОДКЛЮЧЕНИЯ В ANDROID: $ip"
           Write-Host "ЛОГИН: runneradmin"
           Write-Host "ПАРОЛЬ: MyPassword123!"
           Write-Host "=========================================="
 
       - name: Удержание сессии (6 часов)
         run: |
-          # Чтобы GitHub не закрыл задачу
+          # Чтобы GitHub не закрыл задачу раньше времени
           Start-Sleep -Seconds 21600
