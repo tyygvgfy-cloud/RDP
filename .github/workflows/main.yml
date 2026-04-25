@@ -1,42 +1,40 @@
-name: RDP_Windows_Cloudflare
+name: RDP_Windows_Localtunnel
 on: workflow_dispatch
 
 jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Скачивание и установка Cloudflared
+      - name: Установка Node.js и Localtunnel
         run: |
-          Invoke-WebRequest https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.msi -OutFile cloudflared.msi
-          Start-Process msiexec.exe -ArgumentList '/i cloudflared.msi /quiet /norestart' -Wait
+          # Localtunnel работает на Node.js, который уже есть на виртуалке GitHub
+          npm install -g localtunnel
 
       - name: Настройка RDP и Пользователя
         run: |
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name "fDenyTSConnections" -Value 0
           Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
           Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name "UserAuthentication" -Value 1
-          # Создаем пользователя для входа
+          # Создаем админа
           net user runneradmin MyPassword123! /add
           net localgroup administrators runneradmin /add
 
-      - name: Запуск туннеля Cloudflare
+      - name: Запуск туннеля и вывод ссылки
         run: |
-          # Запускаем туннель без необходимости авторизации (Quick Tunnel)
-          Start-Process powershell -ArgumentList "-NoExit -Command `"cloudflared tunnel --url tcp://localhost:3389`""
-
-      - name: Получение ссылки для подключения
-        run: |
-          Write-Host "=========================================="
-          Write-Host "ОЖИДАНИЕ ССЫЛКИ ОТ CLOUDFLARE..."
+          # Запускаем туннель на порт RDP (3389)
+          # Мы используем фоновый процесс через PowerShell
+          Start-Process powershell -ArgumentList "-NoExit -Command `"lt --port 3389`""
+          
+          # Даем время на генерацию ссылки
           Start-Sleep -Seconds 20
-          Write-Host "ВНИМАНИЕ: Ищи ссылку в логах этого шага чуть выше или ниже."
-          Write-Host "Она будет выглядеть как: https://some-random-words.trycloudflare.com"
+          
           Write-Host "=========================================="
+          Write-Host "СЕРВЕР ЗАПУЩЕН!"
           Write-Host "ЛОГИН: runneradmin"
           Write-Host "ПАРОЛЬ: MyPassword123!"
+          Write-Host "ССЫЛКУ ИЩИ В ЛОГАХ ВЫШЕ (строка 'your url is: ...')"
           Write-Host "=========================================="
 
-      - name: Поддержание сессии (6 часов)
+      - name: Удержание сессии (6 часов)
         run: |
-          # Чтобы сервер не выключился
           Start-Sleep -Seconds 21600
